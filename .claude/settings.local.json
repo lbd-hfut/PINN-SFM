@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python *)",
+      "Bash(conda run *)",
+      "Bash(cat)",
+      "Bash(PYTHONIOENCODING=utf-8 conda run -n dic python /tmp/test_imports.py)"
+    ]
+  }
+}
