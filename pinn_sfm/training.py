@@ -23,12 +23,18 @@ def train_pinn_sfm(
     correspondences: list = None,
     gt_cameras:    list = None,
     gt_points:     np.ndarray = None,
+    rotation_deg:  float = 0.3,
+    shared_K:      bool = True,
 ):
     """
     Full PINN-SfM training loop.
 
     If `model`, `correspondences`, `gt_cameras`, `gt_points` are provided,
     they are used directly (external data). Otherwise, synthetic data is generated.
+
+    Key design choices to mitigate intrinsic-extrinsic coupling:
+      - shared_K=True: all cameras share one set of intrinsics (fx, fy, cx, cy)
+      - rotation_deg > 0: cameras have small y-rotations for geometric diversity
 
     Each epoch:
       1. Forward pass → all camera (K, R, t)
@@ -49,6 +55,7 @@ def train_pinn_sfm(
             num_cameras=num_cameras, num_points=num_points, image_size=image_size,
             pixel_size=3.45e-3, f_mm=40.0, work_dist=500.0,
             noise_std=0.0, triang_views=triang_views, seed=0,
+            rotation_deg=rotation_deg,
         )
         print(f"       Cameras: {num_cameras}, Tracks: {len(correspondences)} / {num_points}")
     else:
@@ -56,9 +63,21 @@ def train_pinn_sfm(
 
     # ── Model ──────────────────────────────────────────────────
     if model is None:
-        model = CameraNetwork(num_cameras=num_cameras, hidden_dim=256, num_freqs=8).to(device)
+        # Initialize focal length from known lens + pixel specs (as EXIF would provide)
+        fx_init = 40.0 / 3.45e-3  # f_mm / pixel_size ≈ 11594 for defaults
+        model = CameraNetwork(
+            num_cameras=num_cameras, hidden_dim=256, num_freqs=8,
+            shared_intrinsics=shared_K, image_wh=image_size,
+            init_fx=fx_init,
+        ).to(device)
     param_count = sum(p.numel() for p in model.parameters())
     print(f"[Model] Parameters: {param_count:,}")
+    if shared_K:
+        print(f"       Intrinsics: SHARED (4 params across {num_cameras} cameras)")
+    else:
+        print(f"       Intrinsics: PER-CAMERA ({4*num_cameras} total)")
+    if rotation_deg > 0:
+        print(f"       Camera rotation: ±{rotation_deg}° (breaks pure-translation degeneracy)")
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(

@@ -25,7 +25,8 @@ def print_metrics(K_pred, R_pred, t_pred, correspondences,
     print(f"  Reprojection error  mean: {np.mean(errors):.3f} px  "
           f"median: {np.median(errors):.3f} px  "
           f"<2px: {np.mean(np.array(errors) < 2) * 100:.1f}%")
-    print(f"\n  First 4 cameras focal length (GT=500px):")
+    gt_fx = gt_cameras[0][0][0, 0]
+    print(f"\n  First 4 cameras focal length (GT fx={gt_fx:.0f}):")
     for i in range(min(4, len(gt_cameras))):
         fx_p = K_pred[i, 0, 0].item()
         fy_p = K_pred[i, 1, 1].item()

@@ -5,6 +5,7 @@ Generates correspondences directly without speckle rendering.
 
 import torch
 import numpy as np
+from ..geometry import eul2R
 
 
 def generate_synthetic_data_realistic(
@@ -17,11 +18,18 @@ def generate_synthetic_data_realistic(
     noise_std=0.0,
     triang_views=2,
     seed=0,
+    rotation_deg=0.3,
 ):
     """
     Generate synthetic SfM correspondences based on a realistic DIC camera model.
-    Cameras are placed on a line with step-pixel separation.
-    Points lie on a plane perpendicular to the optical axis.
+    Cameras are placed on a line with alternating y-rotations to provide
+    geometric diversity (avoids the degenerate pure-translation configuration).
+
+    When rotation_deg > 0, each camera has a small rotation around Y-axis,
+    breaking the fx-B-Z coupling inherent in purely translational setups.
+
+    Note: with f_mm=40mm and pixel_size=3.45um, fx≈11594 px and FOV≈5°.
+    rotation_deg should be a fraction of a degree to keep points on-image.
     """
     rng = np.random.default_rng(seed)
     W, H = image_size
@@ -41,10 +49,21 @@ def generate_synthetic_data_realistic(
     Tx_list = (np.arange(num_cameras) * step_px * work_dist) / fx
     Ty_list = np.zeros_like(Tx_list)
 
+    # Alternating y-rotation: [0, -r, +r, -2r, +2r, ...]
+    angles_deg = np.zeros(num_cameras)
+    if num_cameras > 1 and rotation_deg > 0:
+        k = np.arange(1, (num_cameras - 1) // 2 + 1)
+        if num_cameras % 2 == 0:
+            k = np.concatenate([k, [k[-1] + 1]])
+        seq = np.column_stack([-k, k]).ravel()
+        angles_deg[1:] = seq[:num_cameras - 1]
+        angles_deg *= rotation_deg
+
     gt_cameras = []
     for i in range(num_cameras):
-        R = np.eye(3, dtype=np.float32)
-        t = np.array([-Tx_list[i], -Ty_list[i], work_dist], dtype=np.float32)
+        R = eul2R(0, angles_deg[i], 0).astype(np.float32)
+        cam_center = np.array([Tx_list[i], 0, -work_dist], dtype=np.float32)
+        t = -R @ cam_center  # world-to-camera: t = -R @ C
         gt_cameras.append((K_gt.copy(), R, t))
 
     L_view = work_dist * (W * pixel_size) / f_mm
