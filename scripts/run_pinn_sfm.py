@@ -17,7 +17,7 @@ if __name__ == '__main__':
         train_pinn_sfm(
             num_cameras=5,
             num_points=1000,
-            num_epochs=1500,
+            num_epochs=1000,
             lr=5e-3,
             triang_views=2,
             lambda_gauge=20.0,
@@ -25,6 +25,11 @@ if __name__ == '__main__':
             image_size=(1000, 1000),
             rotation_deg=0.5,
             shared_K=True,
+            robust_loss='l2',
+            robust_c=5.0,
+            refine=True,
+            max_reproj_error=8.0,
+            min_triang_angle_deg=0.05,
         )
 
     device = next(model.parameters()).device

@@ -85,8 +85,11 @@ def plot_results(history, gt_cameras, gt_points, K_pred, R_pred, t_pred,
             pts_recon.append(X_j.cpu().numpy())
     pts_recon = np.array(pts_recon)
     ax3.scatter(*gt_points.T, s=10, alpha=0.5, label='Ground Truth')
-    ax3.scatter(*pts_recon.T, s=10, alpha=0.5, label='Reconstructed')
-    ax3.set_title('3D Points (GT vs Reconstructed)')
+    if pts_recon.size > 0:
+        ax3.scatter(*pts_recon.T, s=10, alpha=0.5, label='Reconstructed')
+    else:
+        ax3.text(0.5, 0.5, 0.5, 'No points', transform=ax3.transAxes, ha='center')
+    ax3.set_title('3D Points (%d GT, %d Recon)' % (gt_points.shape[0], len(pts_recon)))
     ax3.legend(fontsize=8)
 
     # (4) Reprojection error histogram
@@ -105,9 +108,10 @@ def plot_results(history, gt_cameras, gt_points, K_pred, R_pred, t_pred,
     # (5) Focal length comparison
     ax5 = fig.add_subplot(2, 3, 5)
     cam_ids = list(range(num_cameras))
+    gt_fx = float(gt_cameras[0][0][0, 0]) if len(gt_cameras) > 0 else 500.0
     pred_fx = [K_pred[i, 0, 0].item() for i in range(num_cameras)]
     pred_fy = [K_pred[i, 1, 1].item() for i in range(num_cameras)]
-    ax5.axhline(500, linewidth=1.5, label='GT f=500')
+    ax5.axhline(gt_fx, linewidth=1.5, label=f'GT f={gt_fx:.0f}')
     ax5.plot(cam_ids, pred_fx, '--o', markersize=5, label='Pred fx')
     ax5.plot(cam_ids, pred_fy, ':s',  markersize=5, label='Pred fy')
     ax5.set_xlabel('Camera Index')

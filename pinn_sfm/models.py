@@ -28,37 +28,37 @@ class PositionalEncoding(nn.Module):
 
 class SharedIntrinsics(nn.Module):
     """
-    Shared intrinsic parameters for all cameras (one fx, fy, cx, cy for the
-    entire camera array). Mirrors COLMAP's shared-camera model.
+    Shared intrinsic parameters: one focal length for all cameras.
+
+    COLMAP-inspired simplifications:
+      - Square pixels (fx = fy) — standard for modern DIC sensors
+      - Principal point fixed at image center — well-known to be ill-posed
+        to calibrate jointly with other parameters [Schoenberger 2018, §7.5.1]
+      - Single log-focal-length parameter with known base_fx from lens specs
+
+    Total trainable intrinsics: 1 parameter (vs 4 earlier, vs 20 originally).
     """
     def __init__(self, W: float, H: float, init_fx: float = 500.0):
         super().__init__()
         self.W = W
         self.H = H
-        # fx = exp(log_f) * init_fx — log-space centered at the known/expected focal length.
-        # In DIC, lens f_mm and pixel_size are known → init_fx can be set accordingly.
         self.base_fx = init_fx
         self.log_f = nn.Parameter(torch.tensor(0.0))
-        # fy = fx * exp(log_aspect)
-        self.log_aspect = nn.Parameter(torch.tensor(0.0))
-        # cx = sigmoid(norm) * W, cy = sigmoid(norm) * H
-        self.cx_norm = nn.Parameter(torch.tensor(0.5))
-        self.cy_norm = nn.Parameter(torch.tensor(0.5))
+        # cx, cy — fixed at image center, not trained
+        # fy = fx — square pixel assumption, no aspect ratio parameter
 
     @property
-    def fx(self):
+    def fx(self) -> torch.Tensor:
         return torch.exp(self.log_f) * self.base_fx
 
     def forward(self, B: int) -> torch.Tensor:
-        fx = self.fx
-        fy = fx * torch.exp(self.log_aspect)
-        cx = torch.sigmoid(self.cx_norm) * self.W
-        cy = torch.sigmoid(self.cy_norm) * self.H
-
+        f = self.fx
+        cx = self.W / 2.0
+        cy = self.H / 2.0
         device = self.log_f.device
         K = torch.zeros(B, 3, 3, device=device)
-        K[:, 0, 0] = fx
-        K[:, 1, 1] = fy
+        K[:, 0, 0] = f
+        K[:, 1, 1] = f
         K[:, 0, 2] = cx
         K[:, 1, 2] = cy
         K[:, 2, 2] = 1.0
